@@ -372,3 +372,45 @@ async def reload_tasks_from_file(db_path: str, tasks_file: str) -> int:
         )
         await db.commit()
         return len(lines)
+
+# ---------------- WAVE ASSIGNMENTS ----------------
+async def clear_wave_assignments(db_path: str, wave_index: int):
+    async with aiosqlite.connect(db_path) as db:
+        await db.execute(
+            "DELETE FROM wave_assignments WHERE wave_index=?",
+            (wave_index,)
+        )
+        await db.commit()
+
+
+async def insert_wave_assignment(
+    db_path: str,
+    wave_index: int,
+    active_id: int,
+    target_id: int,
+    emotion: str
+):
+    async with aiosqlite.connect(db_path) as db:
+        await db.execute(
+            """
+            INSERT INTO wave_assignments(
+                wave_index, active_id, target_id, emotion
+            )
+            VALUES (?, ?, ?, ?)
+            """,
+            (wave_index, active_id, target_id, emotion)
+        )
+        await db.commit()
+
+
+async def get_wave_assignments(db_path: str, wave_index: int):
+    async with aiosqlite.connect(db_path) as db:
+        cur = await db.execute(
+            """
+            SELECT active_id, target_id, emotion
+            FROM wave_assignments
+            WHERE wave_index=?
+            """,
+            (wave_index,)
+        )
+        return await cur.fetchall()
