@@ -36,7 +36,7 @@ from db import (
     insert_wave_assignment,
     get_wave_assignments,
     full_reset,
-    reload_tasks_from_file,
+    reload_tasks_from_file, get_used_tasks, reset_used_tasks_for_group, mark_task_used,
 )
 
 from logic import build_secret_santa_pairs, split_into_groups_max5, make_wave_mapping
@@ -120,17 +120,47 @@ async def schedule_one_shot(seconds: int):
 @dp.message(CommandStart())
 async def start_cmd(message: Message):
     if message.chat.type != "private":
+        await message.answer("👋 Напиши мне в личку, чтобы участвовать в игре 🙂")
         return
+
     await upsert_user(
         DB_PATH,
         message.from_user.id,
         message.from_user.username,
         message.from_user.full_name or "",
     )
+
     await message.answer(
         "✅ Ты зарегистрирован",
         reply_markup=user_menu(is_dev(message.from_user.id)),
     )
+
+
+@dp.message(Command("menu"))
+async def menu_cmd(message: Message):
+    if message.chat.type != "private":
+        await message.answer("📩 Открой личку с ботом и напиши /menu")
+        return
+
+    await message.answer(
+        "Меню:",
+        reply_markup=user_menu(is_dev(message.from_user.id)),
+    )
+
+
+@dp.message(Command("set_group"))
+async def set_group_cmd(message: Message):
+    if message.chat.type == "private":
+        await message.answer("❗ Команда выполняется в группе")
+        return
+
+    if message.from_user.id != DEVELOPER_ID:
+        await message.answer("⛔ Нет доступа")
+        return
+
+    await set_setting(DB_PATH, "GROUP_CHAT_ID", str(message.chat.id))
+    await message.answer("✅ Группа успешно привязана")
+
 
 # ---------------- DELETE ----------------
 @dp.callback_query(F.data == "delete_me")
@@ -178,6 +208,20 @@ async def task_delay(call: CallbackQuery):
     await call.message.answer(f"⏰ Задание будет отправлено в {run_at.strftime('%H:%M:%S')}")
 
 # ---------------- WAVES ----------------
+async def pick_task_for_user(db_path: str, user_id: int, group_idx: int, tasks: list[str]) -> str:
+    used = await get_used_tasks(db_path, user_id, group_idx)
+    available = [t for t in tasks if t not in used]
+
+    if not available:
+        await reset_used_tasks_for_group(db_path, group_idx)
+        available = tasks
+
+    task = random.choice(available)
+    await mark_task_used(db_path, user_id, group_idx, task)
+    return task
+
+
+
 async def run_wave():
     users = await get_active_users(DB_PATH)
     if len(users) < 4:
@@ -195,18 +239,33 @@ async def run_wave():
     active = groups[active_idx]
     passive = groups[(active_idx + 1) % len(groups)]
 
-    await clear_wave_assignments(DB_PATH, wave_index)
+    tasks = read_lines(TASKS_FILE)
     pairs = make_wave_mapping(active, passive)
 
-    emotions = read_lines(EMOTIONS_FILE) or ["Радость"]
+    log = [f"🌊 Волна {wave_index} запущена"]
 
-    for a, t in pairs:
-        await insert_wave_assignment(DB_PATH, wave_index, a, t, random.choice(emotions))
+    for a_id, t_id in pairs:
+        task = await pick_task_for_user(DB_PATH, a_id, active_idx, tasks)
 
-    for a, t, e in await get_wave_assignments(DB_PATH, wave_index):
-        await bot.send_message(a, f"🌊 Эмоция: {e}\nЦель: {await get_user_label(DB_PATH, t)}")
+        await bot.send_message(
+            a_id,
+            f"🎯 *Твоя цель (если в задании это предусмотрено)*: {await get_user_label(DB_PATH, t_id)}\n\n"
+            f"*Задание:*\n{task}"
+        )
 
-    return f"✅ Волна {wave_index}"
+        log.append(
+            f"{await get_user_label(DB_PATH, a_id)} → "
+            f"{await get_user_label(DB_PATH, t_id)} | {task}"
+        )
+
+    # сообщение разработчику
+    await bot.send_message(
+        DEVELOPER_ID,
+        "🚀 " + "\n".join(log)
+    )
+
+    return f"✅ Волна {wave_index} запущена"
+
 
 @dp.callback_query(F.data == "dev_wave_run")
 async def wave_run(call: CallbackQuery):
