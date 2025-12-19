@@ -16,12 +16,12 @@ async def job_send_random_task(bot: Bot, db_path: str, organizer_id: int):
     tg_id, username, full_name = random.choice(users)
 
     user_msg = (
-        "🔔 *Тайное задание!*\n\n"
+        "🔔 *Тайная активность!*\n\n"
         f"{task}\n\n"
-        "_Это видишь только ты и организатор._"
+        "_Это видишь только ты_"
     )
     org_msg = (
-        "📌 Назначено задание\n"
+        "📌 Назначена активность\n"
         f"Кому: {full_name}" + (f" (@{username})" if username else "") + "\n"
         f"Задание: {task}"
     )
