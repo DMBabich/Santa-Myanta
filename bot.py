@@ -239,7 +239,7 @@ async def run_wave():
     active = groups[active_idx]
     passive = groups[(active_idx + 1) % len(groups)]
 
-    tasks = read_lines(TASKS_FILE)
+    tasks = read_lines(EMOTIONS_FILE)
     pairs = make_wave_mapping(active, passive)
 
     log = [f"🌊 Волна {wave_index} запущена"]
