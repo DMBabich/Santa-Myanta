@@ -426,7 +426,7 @@ async def get_wave_assignments(db_path: str, wave_index: int):
 async def get_used_tasks(db_path: str, user_id: int, group_idx: int) -> set[str]:
     async with aiosqlite.connect(db_path) as db:
         cur = await db.execute(
-            "SELECT task_text FROM used_tasks WHERE user_id=? AND group_idx=?",
+            "SELECT task FROM used_tasks WHERE user_id=? AND group_idx=?",
             (user_id, group_idx)
         )
         rows = await cur.fetchall()
@@ -436,10 +436,11 @@ async def get_used_tasks(db_path: str, user_id: int, group_idx: int) -> set[str]
 async def mark_task_used(db_path: str, user_id: int, group_idx: int, task: str):
     async with aiosqlite.connect(db_path) as db:
         await db.execute(
-            "INSERT OR IGNORE INTO used_tasks(user_id, group_idx, task_text) VALUES(?,?,?)",
+            "INSERT OR IGNORE INTO used_tasks(user_id, group_id, task) VALUES(?,?,?)",
             (user_id, group_idx, task)
         )
         await db.commit()
+
 
 
 async def reset_used_tasks_for_group(db_path: str, group_idx: int):
